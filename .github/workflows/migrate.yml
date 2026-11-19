@@ -1,0 +1,39 @@
+name: Migrate Yarn to Mojang names
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/migrate.yml'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Unzip original 1.21.11 source
+        run: |
+          mkdir -p work
+          unzip -q -o orig/*.zip -d work
+          GR=$(find work -name gradlew | head -1)
+          if [ -z "$GR" ]; then echo "gradlew nahi mila"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$GR")" >> "$GITHUB_ENV"
+
+      - name: Migrate mappings
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          chmod +x gradlew
+          ./gradlew migrateMappings --mappings "net.minecraft:mappings:1.21.11" --no-daemon --stacktrace --dependency-verification=off
+
+      - name: Upload migrated source
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remapped-source
+          path: ${{ env.PROJECT_DIR }}/remappedSrc
